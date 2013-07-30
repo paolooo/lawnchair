@@ -2,6 +2,12 @@ Lawnchair.adapter('webkit-sqlite', (function () {
     // private methods 
     var fail = function (e, i) { console.error('error in sqlite adaptor!', e, i) }
     ,   now  = function () { return new Date() } // FIXME need to use better date fn
+    ,   convertInt2String = function(args) {
+            // converts array's integer value to string
+            return args.map(function(value, index, arr){
+                return '' + value
+            });
+        }
 	// not entirely sure if this is needed...
     if (!Function.prototype.bind) {
         Function.prototype.bind = function( obj ) {
@@ -63,7 +69,6 @@ Lawnchair.adapter('webkit-sqlite', (function () {
         save: function (obj, callback, error) {
           var that = this
           ,   objs = (this.isArray(obj) ? obj : [obj]).map(function(o){if(!o.key) { o.key = that.uuid()} return o})
-          ,   ins  = "INSERT OR REPLACE INTO " + this.record + " (value, timestamp, id) VALUES (?,?,?)"
           ,   win  = function () { if (callback) { that.lambda(callback).call(that, that.isArray(obj)?objs:objs[0]) }}
           ,   error= error || function() {}
           ,   insvals = []
@@ -78,10 +83,16 @@ Lawnchair.adapter('webkit-sqlite', (function () {
             throw e;
           }
 
-			 that.db.transaction(function(t) {
-            for (var i = 0, l = objs.length; i < l; i++)
-              t.executeSql(ins, insvals[i])
-			 }, function(e,i){fail(e,i)}, win)
+          that.db.transaction(function(t) {
+            for (var i = 0, l = objs.length; i < l; i++) {
+                // Fixed the issue on id field.
+                // Numeric id will now save as Integer. Otherwise, it will be saved as String.
+                ins  = "INSERT OR REPLACE INTO " + that.record + " (value, timestamp, id) VALUES (?,?,";
+                ins += /\D/.test(insvals[i][2]) ? "'" + insvals[i][2] + "'" : insvals[i][2];
+                ins += ")";
+                t.executeSql(ins, [insvals[i][0], insvals[i][1]])
+            }
+          }, function(e,i){fail(e,i)}, win)
 
           return this
         }, 
