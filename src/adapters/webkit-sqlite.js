@@ -103,96 +103,104 @@ Lawnchair.adapter('webkit-sqlite', (function () {
         },
 
         get: function (keyOrArray, cb) {
-			var that = this
-			,   sql  = ''
-            ,   args = this.isArray(keyOrArray) ? keyOrArray : [keyOrArray];
-            // batch selects support
-            sql = 'SELECT id, value FROM ' + this.record + " WHERE id IN (" +
-                args.map(function(){return '?'}).join(",") + ")"
-			// FIXME
-            // will always loop the results but cleans it up if not a batch return at the end..
-			// in other words, this could be faster
-			var win = function (xxx, results) {
-				var o
-				,   r
-                ,   lookup = {}
-                // map from results to keys
-				for (var i = 0, l = results.rows.length; i < l; i++) {
-					o = JSON.parse(results.rows.item(i).value)
-					o.key = results.rows.item(i).id
-                    lookup[o.key] = o;
-				}
-                r = args.map(function(key) { return lookup[key]; });
-				if (!that.isArray(keyOrArray)) r = r.length ? r[0] : null
-				if (cb) that.lambda(cb).call(that, r)
+          var that = this
+          ,   sql  = ''
+          ,   args = this.isArray(keyOrArray) ? keyOrArray : [keyOrArray];
+          // batch selects support
+          sql = 'SELECT id, value FROM ' + this.record + " WHERE id IN (" +
+              args.map(function(){return '?'}).join(",") + ")"
+
+          // converts integer value to string
+          args = convertInt2String(args);
+
+          // FIXME
+          // will always loop the results but cleans it up if not a batch return at the end..
+          // in other words, this could be faster
+          var win = function (xxx, results) {
+            var o
+            ,   r
+            ,   lookup = {}
+            // map from results to keys
+            for (var i = 0, l = results.rows.length; i < l; i++) {
+              o = JSON.parse(results.rows.item(i).value)
+              o.key = results.rows.item(i).id
+              lookup[o.key] = o;
             }
-            this.db.readTransaction(function(t){ t.executeSql(sql, args, win, fail) })
-            return this 
-		},
+            r = args.map(function(key) { return lookup[key]; });
+            if (!that.isArray(keyOrArray)) r = r.length ? r[0] : null
+            if (cb) that.lambda(cb).call(that, r)
+          }
 
-		exists: function (key, cb) {
-			var is = "SELECT * FROM " + this.record + " WHERE id = ?"
-			,   that = this
-			,   win = function(xxx, results) { if (cb) that.fn('exists', cb).call(that, (results.rows.length > 0)) }
-			this.db.readTransaction(function(t){ t.executeSql(is, [key], win, fail) })
-			return this
-		},
+          this.db.readTransaction(function(t){ t.executeSql(sql, args, win, fail) })
+          return this 
+        },
 
-		all: function (callback) {
-			var that = this
-			,   all  = "SELECT * FROM " + this.record
-			,   r    = []
-			,   cb   = this.fn(this.name, callback) || undefined
-			,   win  = function (xxx, results) {
-				if (results.rows.length != 0) {
-					for (var i = 0, l = results.rows.length; i < l; i++) {
-						var obj = JSON.parse(results.rows.item(i).value)
-						obj.key = results.rows.item(i).id
-						r.push(obj)
-					}
-				}
-				if (cb) cb.call(that, r)
-			}
+        exists: function (key, cb) {
+          var is = "SELECT * FROM " + this.record + " WHERE id = ?"
+          ,   that = this
+          ,   win = function(xxx, results) { if (cb) that.fn('exists', cb).call(that, (results.rows.length > 0)) }
+          this.db.readTransaction(function(t){ t.executeSql(is, [''+key], win, fail) })
+          return this
+        },
 
-			this.db.readTransaction(function (t) { 
-				t.executeSql(all, [], win, fail) 
-			})
-			return this
-		},
+        all: function (callback) {
+          var that = this
+          ,   all  = "SELECT * FROM " + this.record
+          ,   r    = []
+          ,   cb   = this.fn(this.name, callback) || undefined
+          ,   win  = function (xxx, results) {
+            if (results.rows.length != 0) {
+              for (var i = 0, l = results.rows.length; i < l; i++) {
+                var obj = JSON.parse(results.rows.item(i).value)
+                obj.key = results.rows.item(i).id
+                r.push(obj)
+              }
+            }
+            if (cb) cb.call(that, r)
+          }
 
-		remove: function (keyOrArray, cb) {
-			var that = this
-                        ,   args
-			,   sql  = "DELETE FROM " + this.record + " WHERE id "
-			,   win  = function () { if (cb) that.lambda(cb).call(that) }
-                        if (!this.isArray(keyOrArray)) {
-                            sql += '= ?';
-                            args = [keyOrArray];
-                        } else {
-                            args = keyOrArray;
-                            sql += "IN (" +
-                                args.map(function(){return '?'}).join(',') +
-                                ")";
-                        }
-                        args = args.map(function(obj) {
-                            return obj.key ? obj.key : obj;
-                        });
+          this.db.readTransaction(function (t) { 
+            t.executeSql(all, [], win, fail) 
+          })
+          return this
+        },
 
-			this.db.transaction( function (t) {
-			    t.executeSql(sql, args, win, fail);
-			});
+        remove: function (keyOrArray, cb) {
+          var that = this
+          ,   args = this.isArray(keyOrArray) ? keyOrArray : [keyOrArray]
+          ,   sql  = "DELETE FROM " + this.record + " WHERE id "
+          ,   win  = function () { if (cb) that.lambda(cb).call(that) }
 
-			return this;
-		},
+          if (!this.isArray(keyOrArray)) {
+              sql += '= ?';
+          } else {
+              sql += "IN (" +
+                  args.map(function(){return '?'}).join(',') +
+                  ")";
+          }
+					
+					args = args.map(function(obj) {
+						return obj.key ? obj.key : obj;
+					});
 
-		nuke: function (cb) {
-			var nuke = "DELETE FROM " + this.record
-			,   that = this
-			,   win  = cb ? function() { that.lambda(cb).call(that) } : function(){}
-				this.db.transaction(function (t) { 
-				t.executeSql(nuke, [], win, fail) 
-			})
-			return this
-		}
+          // converts integer value to string
+          args = convertInt2String(args);
+
+          this.db.transaction( function (t) {
+              t.executeSql(sql, args, win, fail);
+          });
+
+          return this;
+        },
+
+        nuke: function (cb) {
+          var nuke = "DELETE FROM " + this.record
+          ,   that = this
+          ,   win  = cb ? function() { that.lambda(cb).call(that) } : function(){}
+            this.db.transaction(function (t) { 
+            t.executeSql(nuke, [], win, fail) 
+          })
+          return this
+        }
 //////
-}})());
+}})())
