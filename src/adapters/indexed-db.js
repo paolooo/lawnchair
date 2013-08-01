@@ -62,7 +62,6 @@ Lawnchair.adapter('indexed-db', (function(){
         };
         
         var upgrade = function(from, to) {
-						console.log('options: ', options)
             // don't try to migrate dbs, just recreate
             try {
                 self.db.deleteObjectStore('teststore'); // old adapter
