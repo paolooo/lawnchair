@@ -76,7 +76,8 @@ Lawnchair.adapter('indexed-db', (function(){
 
 						if ( options.records ) {
 							// create multiple records or objectStores
-							for ( i = options.records.length; i--; ) {
+							// option object = {..., records:['objectStore1', 'objectStore2']}
+							for ( i=options.records.length; i--; ) {
 								self.db.createObjectStore(options.records[i], params);
 							}
 						} else {
