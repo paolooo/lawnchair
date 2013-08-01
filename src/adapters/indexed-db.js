@@ -62,6 +62,7 @@ Lawnchair.adapter('indexed-db', (function(){
         };
         
         var upgrade = function(from, to) {
+						console.log('options: ', options)
             // don't try to migrate dbs, just recreate
             try {
                 self.db.deleteObjectStore('teststore'); // old adapter
@@ -73,7 +74,16 @@ Lawnchair.adapter('indexed-db', (function(){
             // ok, create object store.
             var params = {};
             if (self.useAutoIncrement) { params.autoIncrement = true; }
-            self.db.createObjectStore(self.record, params);
+
+						if ( options.records ) {
+							// create multiple records or objectStores
+							for ( i = options.records.length; i--; ) {
+								self.db.createObjectStore(options.records[i], params);
+							}
+						} else {
+							// single records
+							self.db.createObjectStore(self.record, params);
+						}
             self.store = true;
         };
         request.onupgradeneeded = function(event) {
